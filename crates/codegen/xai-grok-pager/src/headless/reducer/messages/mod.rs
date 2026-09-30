@@ -29,6 +29,13 @@ use wire::{
 };
 
 /// `streaming-messages-json`: the Messages API wire format.
+struct FrameModelIdentity {
+    model: String,
+    selected_model: Option<String>,
+    response_model: Option<String>,
+    origin: &'static str,
+}
+
 pub(crate) struct MessagesReducer {
     /// Session facts, populated by `begin`; `None` until then.
     session: Option<SessionState>,
@@ -285,12 +292,16 @@ impl MessagesReducer {
                 self.msg_seq += 1;
                 id
             });
+        let model_identity = self.frame_model_identity(&identity);
         let frame = AssistantFrame {
             message: AssistantMessage {
                 id,
                 kind: "message",
                 role: "assistant",
-                model: self.frame_model(&identity),
+                model: model_identity.model,
+                selected_model: model_identity.selected_model,
+                response_model: model_identity.response_model,
+                model_origin: model_identity.origin,
                 content,
                 stop_reason,
                 stop_sequence,
@@ -362,20 +373,40 @@ impl MessagesReducer {
             .unwrap_or_else(|| "unknown".to_string())
     }
 
-    /// The model for one response's frames: its own model, then the session model, then `"unknown"`.
-    fn frame_model(&self, identity: &ResponseIdentity) -> String {
-        identity
+    /// Preserve provider-reported response identity separately from configured session selection.
+    fn frame_model_identity(&self, identity: &ResponseIdentity) -> FrameModelIdentity {
+        let response_model = identity
             .model
-            .as_deref()
-            .filter(|m| !m.is_empty())
-            .map(str::to_string)
-            .or_else(|| {
-                self.session
-                    .as_ref()
-                    .and_then(|s| s.model.clone())
-                    .filter(|m| !m.is_empty())
-            })
-            .unwrap_or_else(|| "unknown".to_string())
+            .clone()
+            .filter(|m| !m.is_empty());
+        let selected_model = self
+            .session
+            .as_ref()
+            .and_then(|s| s.selected_model.clone())
+            .filter(|m| !m.is_empty());
+
+        if let Some(model) = response_model.clone() {
+            FrameModelIdentity {
+                model,
+                selected_model,
+                response_model,
+                origin: "response",
+            }
+        } else if let Some(model) = selected_model.clone() {
+            FrameModelIdentity {
+                model,
+                selected_model,
+                response_model: None,
+                origin: "selection",
+            }
+        } else {
+            FrameModelIdentity {
+                model: "unknown".to_string(),
+                selected_model: None,
+                response_model: None,
+                origin: "unknown",
+            }
+        }
     }
 
     /// Flush a response that completed but was never flushed, before new content begins.
@@ -480,6 +511,7 @@ impl Reducer for MessagesReducer {
         );
         self.session = Some(SessionState {
             session_id: ctx.session_id,
+            selected_model: ctx.model.clone(),
             model: ctx.model,
             cwd: ctx.cwd,
             permission_mode: ctx.permission_mode,
