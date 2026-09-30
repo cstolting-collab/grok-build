@@ -198,8 +198,45 @@ fn messages_per_response_model_reflects_mid_session_switch() {
     };
     assert_eq!(json_str(a, "/message/id"), Some("msg_a"));
     assert_eq!(json_str(a, "/message/model"), Some("grok-4"));
+    assert_eq!(json_str(a, "/message/selected_model"), Some("grok-4"));
+    assert_eq!(json_str(a, "/message/response_model"), Some("grok-4"));
+    assert_eq!(json_str(a, "/message/model_origin"), Some("response"));
     assert_eq!(json_str(b, "/message/id"), Some("msg_b"));
     assert_eq!(json_str(b, "/message/model"), Some("grok-4-fast"));
+    assert_eq!(json_str(b, "/message/selected_model"), Some("grok-4"));
+    assert_eq!(json_str(b, "/message/response_model"), Some("grok-4-fast"));
+    assert_eq!(json_str(b, "/message/model_origin"), Some("response"));
+}
+
+#[test]
+fn messages_missing_response_model_marks_selection_origin() {
+    let mut r = messages(false);
+    let mut out = Vec::new();
+    out.extend(r.reduce(response_started("msg_a", None, 5)));
+    out.extend(r.reduce(StreamEvent::AgentMessage("from selection".into())));
+    out.extend(r.reduce(response_completed("msg_a", "end_turn")));
+    out.extend(r.finish(&end_turn()));
+
+    let assistant = out
+        .iter()
+        .find(|m| msg_type(m) == Some("assistant"))
+        .expect("assistant frame");
+
+    assert_eq!(json_str(assistant, "/message/model"), Some("grok-4"));
+    assert_eq!(
+        json_str(assistant, "/message/selected_model"),
+        Some("grok-4")
+    );
+    assert!(
+        assistant
+            .pointer("/message/response_model")
+            .is_some_and(Value::is_null),
+        "missing provider identity stays null: {assistant:?}"
+    );
+    assert_eq!(
+        json_str(assistant, "/message/model_origin"),
+        Some("selection")
+    );
 }
 
 #[test]

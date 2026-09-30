@@ -10,10 +10,22 @@ fn messages_partial_deltas_emitted_when_enabled() {
     let Some(start) = out.iter().find(|m| event_type(m) == Some("message_start")) else {
         panic!("message_start: {out:?}");
     };
+    assert_eq!(
+        json_str(start, "/event/message/model"),
+        Some("grok-4")
+    );
+    assert_eq!(
+        json_str(start, "/event/message/selected_model"),
+        Some("grok-4")
+    );
     assert!(
         start
-            .pointer("/event/message/model")
-            .is_some_and(Value::is_string)
+            .pointer("/event/message/response_model")
+            .is_some_and(Value::is_null)
+    );
+    assert_eq!(
+        json_str(start, "/event/message/model_origin"),
+        Some("selection")
     );
     assert!(
         start

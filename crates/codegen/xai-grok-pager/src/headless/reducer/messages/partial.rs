@@ -36,13 +36,16 @@ impl MessagesReducer {
             self.partial_msg_seq += 1;
             id
         });
-        let model = self.frame_model(&identity);
+        let model_identity = self.frame_model_identity(&identity);
         out.push(self.partial_wrap(StreamEventBody::MessageStart {
             message: PartialMessage {
                 id,
                 kind: "message",
                 role: "assistant",
-                model,
+                model: model_identity.model,
+                selected_model: model_identity.selected_model,
+                response_model: model_identity.response_model,
+                model_origin: model_identity.origin,
                 content: Vec::new(),
                 stop_reason: None,
                 stop_sequence: None,
