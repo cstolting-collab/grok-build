@@ -163,6 +163,9 @@ impl ResponseState {
 /// The session facts captured at `MessagesReducer::begin`; `model` is `Option` because a backend may not send it until the first `ResponseStarted`.
 pub(super) struct SessionState {
     pub(super) session_id: String,
+    /// Model selected/configured for the session before any provider response metadata.
+    pub(super) selected_model: Option<String>,
+    /// Current model used for existing compatibility/accounting behavior.
     pub(super) model: Option<String>,
     pub(super) cwd: String,
     pub(super) permission_mode: Option<String>,
